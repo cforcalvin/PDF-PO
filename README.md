@@ -1,6 +1,6 @@
 # PDF-PO
 
-PDFPO is a simple, open-source macOS PDF editor written in Swift. It lets you open a PDF, select text, and replace the selection by masking it and drawing new text on top.
+PDF-PO is a simple, open-source macOS PDF editor written in Swift. It lets you open a PDF, select text, and replace the selection by masking it and drawing new text on top.
 
 ## Features
 - Open and view PDFs
