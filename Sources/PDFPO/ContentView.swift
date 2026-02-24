@@ -1,23 +1,25 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var controller = PDFDocumentController()
+    @StateObject private var controller: PDFDocumentController
     @Binding var fileURL: URL?
-    @State private var replacementText: String = ""
     @State private var isTargeted: Bool = false
+    @State private var isHoveringDropArea: Bool = false
+    @State private var isPressingDropArea: Bool = false
 
-    init(fileURL: Binding<URL?>) {
+    init(fileURL: Binding<URL?>, controller: PDFDocumentController = PDFDocumentController()) {
         _fileURL = fileURL
+        _controller = StateObject(wrappedValue: controller)
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    Button("Open") { controller.openDocument() }
                     ControlGroup {
                         Button("Save") { controller.save() }
                             .keyboardShortcut("s")
+                            .disabled(controller.document == nil || !controller.hasChanges)
                         Menu {
                             Button("Save As") { controller.saveAs() }
                                 .keyboardShortcut("s", modifiers: [.command, .shift])
@@ -26,6 +28,7 @@ struct ContentView: View {
                                 .font(.caption2)
                         }
                         .menuIndicator(.hidden)
+                        .disabled(controller.document == nil || !controller.hasChanges)
                     }
                     .controlGroupStyle(.automatic)
                     Divider().frame(height: 20)
@@ -55,15 +58,33 @@ struct ContentView: View {
             .blur(radius: isTargeted && controller.document == nil ? 2 : 0)
 
             if controller.document == nil {
-                VStack(spacing: 12) {
-                    Text("Drop a PDF here to open")
-                        .font(.title2)
-                    Text("or use the Open button")
-                        .foregroundStyle(.secondary)
+                Button {
+                    controller.openDocument()
+                } label: {
+                    VStack(spacing: 12) {
+                        Text("Drop a PDF here to open")
+                            .font(.title2)
+                        Text("or click to browse")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(30)
+                    .background(.thinMaterial)
+                    .cornerRadius(12)
+                    .scaleEffect(isPressingDropArea ? 0.98 : (isHoveringDropArea ? 1.05 : 1.0))
+                    .opacity(isHoveringDropArea ? 0.92 : 1.0)
                 }
-                .padding(30)
-                .background(.thinMaterial)
-                .cornerRadius(12)
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .onHover { hovering in
+                    isHoveringDropArea = hovering
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isPressingDropArea = true }
+                        .onEnded { _ in isPressingDropArea = false }
+                )
+                .animation(.easeInOut(duration: 0.2), value: isHoveringDropArea)
+                .animation(.easeInOut(duration: 0.12), value: isPressingDropArea)
             }
         }
         .frame(minWidth: 900, minHeight: 600)

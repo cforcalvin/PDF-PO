@@ -14,6 +14,7 @@ mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 
 cp "${ROOT_DIR}/Resources/Info.plist" "${APP_DIR}/Contents/Info.plist"
+cp "${ROOT_DIR}/Resources/PDFPO.icns" "${APP_DIR}/Contents/Resources/PDFPO.icns"
 cp "${BIN_PATH}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
 echo "Built ${APP_DIR}"

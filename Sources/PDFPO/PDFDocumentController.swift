@@ -8,6 +8,7 @@ final class PDFDocumentController: ObservableObject {
     @Published var currentFileURL: URL?
     @Published var statusMessage: String = "Open a PDF to begin."
     @Published var selectedText: String = ""
+    @Published var hasChanges: Bool = false
 
     weak var pdfView: PDFView? {
         didSet {
@@ -56,6 +57,7 @@ final class PDFDocumentController: ObservableObject {
         document = loaded
         pdfView?.document = loaded
         currentFileURL = url
+        hasChanges = false
         statusMessage = url.lastPathComponent
         NSLog("PDFPO: opened PDF with \(loaded.pageCount) pages")
     }
@@ -72,6 +74,7 @@ final class PDFDocumentController: ObservableObject {
             pdfView.document = loaded
         }
         currentFileURL = nil
+        hasChanges = false
         statusMessage = suggestedFilename
         NSLog("PDFPO: opened PDF from data with \(loaded.pageCount) pages")
     }
@@ -93,6 +96,7 @@ final class PDFDocumentController: ObservableObject {
 
     func addAnnotation(_ annotation: PDFAnnotation, to page: PDFPage) {
         page.addAnnotation(annotation)
+        hasChanges = true
         undoManager()?.registerUndo(withTarget: self) { target in
             target.removeAnnotation(annotation, from: page)
         }
@@ -133,39 +137,41 @@ final class PDFDocumentController: ObservableObject {
         return text
     }
 
-    func saveAs() {
-        guard let document else { return }
+    @discardableResult
+    func saveAs() -> Bool {
+        guard let document else { return false }
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = currentFileURL?.lastPathComponent ?? "Edited.pdf"
 
-        if panel.runModal() == .OK, let url = panel.url {
-            if document.write(to: url) {
-                statusMessage = "Saved: \(url.lastPathComponent)"
-            } else {
-                statusMessage = "Save failed."
-            }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        guard document.write(to: url) else {
+            statusMessage = "Save failed."
+            return false
         }
+        hasChanges = false
+        statusMessage = "Saved: \(url.lastPathComponent)"
+        return true
     }
 
-    func save() {
-        guard let document else { return }
-        guard let url = currentFileURL else {
-            saveAs()
-            return
-        }
+    @discardableResult
+    func save() -> Bool {
+        guard let document else { return false }
+        guard let url = currentFileURL else { return saveAs() }
 
         let access = url.startAccessingSecurityScopedResource()
         defer {
             if access { url.stopAccessingSecurityScopedResource() }
         }
 
-        if document.write(to: url) {
-            statusMessage = "Saved: \(url.lastPathComponent)"
-        } else {
+        guard document.write(to: url) else {
             statusMessage = "Save failed."
+            return false
         }
+        hasChanges = false
+        statusMessage = "Saved: \(url.lastPathComponent)"
+        return true
     }
 
     func updateSelection() {
@@ -176,14 +182,19 @@ final class PDFDocumentController: ObservableObject {
         let selectionText = selection.string ?? ""
         selectedText = selectionText
 
-        guard !selectionText.isEmpty, !isApplyingAutoReplace else { return }
+        guard !isApplyingAutoReplace else { return }
+        // Replace when we have text, or when selection has valid bounds (e.g. table cells where string can be empty).
+        let hasText = !selectionText.isEmpty
+        let hasValidBounds = selection.pages.contains { selection.bounds(for: $0).width > 0 && selection.bounds(for: $0).height > 0 }
+        guard hasText || hasValidBounds else { return }
+
         isApplyingAutoReplace = true
-        replaceSelection(with: selectionText)
+        replaceSelection(with: hasText ? selectionText : "")
         isApplyingAutoReplace = false
     }
 
     func replaceSelection(with replacement: String) {
-        guard let pdfView, let document, !replacement.isEmpty else { return }
+        guard let pdfView, let document else { return }
         guard let selection = pdfView.currentSelection else { return }
 
         let lineSelections = selection.selectionsByLine()
@@ -191,32 +202,49 @@ final class PDFDocumentController: ObservableObject {
 
         for page in selection.pages {
             let pageLineSelections = lineSelections.filter { $0.pages.contains(page) }
-            guard !pageLineSelections.isEmpty else { continue }
+            let unionBounds: CGRect
+            let pageText: String
+            let firstLineIndent: CGFloat
 
-            let pageText = pageLineSelections.compactMap { $0.string?.trimmingCharacters(in: .newlines) }
-                .joined(separator: "\n")
-            if pageText.isEmpty { continue }
+            let useLineBased = !pageLineSelections.isEmpty
+                && pageLineSelections.contains { $0.bounds(for: page).width > 0 && $0.bounds(for: page).height > 0 }
 
-            // Mask each selected line so we don't hide text before the selection start.
-            for lineSelection in pageLineSelections {
-                let bounds = lineSelection.bounds(for: page)
-                guard bounds.width > 0, bounds.height > 0 else { continue }
-                let cover = PDFAnnotation(bounds: bounds, forType: .square, withProperties: nil)
+            if useLineBased {
+                pageText = pageLineSelections.compactMap { $0.string?.trimmingCharacters(in: .newlines) }
+                    .joined(separator: "\n")
+                if pageText.isEmpty { continue }
+
+                for lineSelection in pageLineSelections {
+                    let bounds = lineSelection.bounds(for: page)
+                    guard bounds.width > 0, bounds.height > 0 else { continue }
+                    let cover = PDFAnnotation(bounds: bounds, forType: .square, withProperties: nil)
+                    cover.color = NSColor.white
+                    cover.interiorColor = NSColor.white
+                    cover.border = PDFBorder()
+                    cover.border?.lineWidth = 0
+                    addAnnotation(cover, to: page)
+                }
+
+                let firstLineBounds = pageLineSelections.first!.bounds(for: page)
+                unionBounds = pageLineSelections.reduce(firstLineBounds) { result, sel in
+                    result.union(sel.bounds(for: page))
+                }
+                firstLineIndent = max(0, firstLineBounds.minX - unionBounds.minX)
+            } else {
+                // Fallback for table cells and other content where selectionsByLine() is empty or has zero bounds.
+                unionBounds = selection.bounds(for: page)
+                guard unionBounds.width > 0, unionBounds.height > 0 else { continue }
+                pageText = replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Allow empty pageText so user can type when PDFKit gives no string (e.g. some table cells).
+
+                let cover = PDFAnnotation(bounds: unionBounds, forType: .square, withProperties: nil)
                 cover.color = NSColor.white
                 cover.interiorColor = NSColor.white
                 cover.border = PDFBorder()
                 cover.border?.lineWidth = 0
                 addAnnotation(cover, to: page)
+                firstLineIndent = 0
             }
-
-            // Use the first line's start X for first-line indent.
-            let firstLineBounds = pageLineSelections.first!.bounds(for: page)
-            let unionBounds = pageLineSelections.reduce(firstLineBounds) { result, selection in
-                result.union(selection.bounds(for: page))
-            }
-            let startX = firstLineBounds.minX
-            let minX = unionBounds.minX
-            let firstLineIndent = max(0, startX - minX)
 
             let attributed = selection.attributedString
             var dominantFont: NSFont?

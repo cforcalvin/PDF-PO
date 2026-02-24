@@ -17,7 +17,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>CFBundleIconFile</key>
-    <string>PDFPO</string>
+    <string>PDFPO.icns</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
