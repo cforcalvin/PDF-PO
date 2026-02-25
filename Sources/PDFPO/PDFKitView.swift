@@ -87,38 +87,41 @@ final class PDFDropView: PDFView, NSTextViewDelegate {
                 
                 // If no annotation, check for text selection
                 if let wordSelection = page.selectionForWord(at: pagePoint) {
-                    commitEditing()
-                    
-                    // Add a white cover annotation over the word
+                    // Verify the click is actually inside the word's bounds
                     let wordBounds = wordSelection.bounds(for: page)
-                    let cover = PDFAnnotation(bounds: wordBounds, forType: .square, withProperties: nil)
-                    cover.color = NSColor.white
-                    cover.interiorColor = NSColor.white
-                    cover.border = PDFBorder()
-                    cover.border?.lineWidth = 0
-                    controller.addAnnotation(cover, to: page)
+                    if wordBounds.contains(pagePoint) {
+                        commitEditing()
+                        
+                        // Add a white cover annotation over the word
+                        let cover = PDFAnnotation(bounds: wordBounds, forType: .square, withProperties: nil)
+                        cover.color = NSColor.white
+                        cover.interiorColor = NSColor.white
+                        cover.border = PDFBorder()
+                        cover.border?.lineWidth = 0
+                        controller.addAnnotation(cover, to: page)
 
-                    let annotation = controller.createTextAnnotation(
-                        at: pagePoint,
-                        on: page,
-                        scaleFactor: scaleFactor
-                    )
-                    
-                    // Set annotation bounds to match word selection with extra width
-                    var adjustedBounds = wordBounds
-                    adjustedBounds.size.width += 20 // Add extra width to prevent clipping/wrapping
-                    annotation.bounds = adjustedBounds
-                    annotation.contents = wordSelection.string
-                    
-                    // Infer font from selection if possible
-                    if let attributed = wordSelection.attributedString, attributed.length > 0 {
-                        if let font = attributed.attribute(.font, at: 0, effectiveRange: nil) as? NSFont {
-                            annotation.font = font
+                        let annotation = controller.createTextAnnotation(
+                            at: pagePoint,
+                            on: page,
+                            scaleFactor: scaleFactor
+                        )
+                        
+                        // Set annotation bounds to match word selection with extra width
+                        var adjustedBounds = wordBounds
+                        adjustedBounds.size.width += 20 // Add extra width to prevent clipping/wrapping
+                        annotation.bounds = adjustedBounds
+                        annotation.contents = wordSelection.string
+                        
+                        // Infer font from selection if possible
+                        if let attributed = wordSelection.attributedString, attributed.length > 0 {
+                            if let font = attributed.attribute(.font, at: 0, effectiveRange: nil) as? NSFont {
+                                annotation.font = font
+                            }
                         }
+                        
+                        beginEditing(annotation: annotation, focus: true)
+                        return
                     }
-                    
-                    beginEditing(annotation: annotation, focus: true)
-                    return
                 }
 
                 // Default: create new annotation
@@ -129,6 +132,7 @@ final class PDFDropView: PDFView, NSTextViewDelegate {
                         on: page,
                         scaleFactor: scaleFactor
                     )
+                    annotation.contents = "Text"
                     beginEditing(annotation: annotation, focus: true)
                     return
                 }
@@ -528,7 +532,7 @@ final class ResizeHandleView: NSView {
         tri.line(to: NSPoint(x: midX - triWidth / 2, y: midY - triHeight / 2))
         tri.line(to: NSPoint(x: midX - triWidth / 2, y: midY + triHeight / 2))
         tri.close()
-        NSColor.white.setFill()
+        NSColor.labelColor.setFill()
         tri.fill()
     }
 }
@@ -590,7 +594,7 @@ final class FontSizeHandleView: NSView {
         tri.line(to: NSPoint(x: midX - triBaseHalf, y: midY - triVertical / 2))
         tri.line(to: NSPoint(x: midX + triBaseHalf, y: midY - triVertical / 2))
         tri.close()
-        NSColor.white.setFill()
+        NSColor.labelColor.setFill()
         tri.fill()
     }
 }
