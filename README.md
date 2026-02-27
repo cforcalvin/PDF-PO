@@ -1,5 +1,9 @@
 # PDF-PO
 
+<img width="938" height="668" alt="image" src="https://github.com/user-attachments/assets/db5d2109-bde7-4e18-8069-d29c7f90269b" />
+<img width="934" height="672" alt="image" src="https://github.com/user-attachments/assets/fecce9b3-fc7b-4985-bd13-64a578377a31" />
+
+
 PDF-PO is a simple, open-source macOS PDF editor written in Swift. It lets you open a PDF, select text, and replace the selection by masking it and drawing new text on top.
 
 ## Features
