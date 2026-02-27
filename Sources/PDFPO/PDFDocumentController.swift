@@ -97,15 +97,21 @@ final class PDFDocumentController: ObservableObject {
     func addAnnotation(_ annotation: PDFAnnotation, to page: PDFPage) {
         page.addAnnotation(annotation)
         hasChanges = true
-        undoManager()?.registerUndo(withTarget: self) { target in
-            target.removeAnnotation(annotation, from: page)
+        undoManager()?.registerUndo(withTarget: self) { [weak annotation, weak page] target in
+            guard let annotation, let page else { return }
+            DispatchQueue.main.async {
+                target.removeAnnotation(annotation, from: page)
+            }
         }
     }
 
     func removeAnnotation(_ annotation: PDFAnnotation, from page: PDFPage) {
         page.removeAnnotation(annotation)
-        undoManager()?.registerUndo(withTarget: self) { target in
-            target.addAnnotation(annotation, to: page)
+        undoManager()?.registerUndo(withTarget: self) { [weak annotation, weak page] target in
+            guard let annotation, let page else { return }
+            DispatchQueue.main.async {
+                target.addAnnotation(annotation, to: page)
+            }
         }
     }
 
@@ -137,7 +143,7 @@ final class PDFDocumentController: ObservableObject {
         return text
     }
 
-    @discardableResult
+    @objc @discardableResult
     func saveAs() -> Bool {
         guard let document else { return false }
 
@@ -155,7 +161,7 @@ final class PDFDocumentController: ObservableObject {
         return true
     }
 
-    @discardableResult
+    @objc @discardableResult
     func save() -> Bool {
         guard let document else { return false }
         guard let url = currentFileURL else { return saveAs() }

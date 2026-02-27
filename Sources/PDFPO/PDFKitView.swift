@@ -63,7 +63,7 @@ final class PDFDropView: PDFView, NSTextViewDelegate {
     private var pendingStartPoint: CGPoint = .zero
     private var didDragAnnotation: Bool = false
 
-    private let editorResizeHandleWidth: CGFloat = 12
+    private let editorResizeHandleWidth: CGFloat = 20
     private let editorFontSizeHandleSize: CGFloat = 28
     private let editorMinWidth: CGFloat = 80
     private let editorMinHeight: CGFloat = 24
@@ -363,14 +363,22 @@ final class PDFDropView: PDFView, NSTextViewDelegate {
             }
             annotation.shouldDisplay = true
             if let controller, let undo = controller.undoManager() {
-                undo.registerUndo(withTarget: annotation) { ann in
-                    let redoContents = ann.contents ?? ""
-                    let redoBounds = ann.bounds
-                    ann.contents = previousContents
-                    ann.bounds = previousBounds
-                    undo.registerUndo(withTarget: ann) { _ in
-                        ann.contents = redoContents
-                        ann.bounds = redoBounds
+                undo.registerUndo(withTarget: annotation) { [weak annotation] ann in
+                    guard let annotation else { return }
+                    let redoContents = annotation.contents ?? ""
+                    let redoBounds = annotation.bounds
+                    
+                    DispatchQueue.main.async {
+                        annotation.contents = previousContents
+                        annotation.bounds = previousBounds
+                        
+                        undo.registerUndo(withTarget: annotation) { [weak annotation] _ in
+                            guard let annotation else { return }
+                            DispatchQueue.main.async {
+                                annotation.contents = redoContents
+                                annotation.bounds = redoBounds
+                            }
+                        }
                     }
                 }
                 undo.setActionName("Edit Text")
@@ -510,19 +518,37 @@ final class ResizeHandleView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         let rect = bounds
+        let radius: CGFloat = 8
+        let kappa: CGFloat = 0.55228474983
+        let path = NSBezierPath()
+        
+        // Draw path with rounded top-right and bottom-right using cubic Bezier curves
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX - radius, y: rect.minY))
+        // Bottom-right corner
+        path.curve(to: NSPoint(x: rect.maxX, y: rect.minY + radius),
+                   controlPoint1: NSPoint(x: rect.maxX - radius * (1 - kappa), y: rect.minY),
+                   controlPoint2: NSPoint(x: rect.maxX, y: rect.minY + radius * (1 - kappa)))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
+        // Top-right corner
+        path.curve(to: NSPoint(x: rect.maxX - radius, y: rect.maxY),
+                   controlPoint1: NSPoint(x: rect.maxX, y: rect.maxY - radius * (1 - kappa)),
+                   controlPoint2: NSPoint(x: rect.maxX - radius * (1 - kappa), y: rect.maxY))
+        path.line(to: NSPoint(x: rect.minX, y: rect.maxY))
+        path.close()
+
         NSColor.controlBackgroundColor.withAlphaComponent(0.7).setFill()
-        NSBezierPath(rect: rect).fill()
+        path.fill()
         NSColor.systemBlue.setStroke()
-        let border = NSBezierPath(rect: rect)
-        border.lineWidth = 1
-        border.stroke()
+        path.lineWidth = 1
+        path.stroke()
 
         let midX = rect.midX
         let midY = rect.midY
         let pad: CGFloat = 4
         let vertPad: CGFloat = 5
         let availableHeight = rect.height - vertPad * 2
-        let availableWidth = rect.width - pad * 2
+        let availableWidth = 12 - pad * 2 // Keep triangle size consistent with 12pt width
         let sqrt3: CGFloat = 1.73205080757
         let triHeight = min(availableHeight, availableWidth * 2 / sqrt3)
         let triWidth = triHeight * sqrt3 / 2
@@ -573,12 +599,30 @@ final class FontSizeHandleView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         let rect = bounds
+        let radius: CGFloat = 8
+        let kappa: CGFloat = 0.55228474983
+        let path = NSBezierPath()
+        
+        // Draw path with rounded top-left and top-right using cubic Bezier curves
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
+        // Top-right corner
+        path.curve(to: NSPoint(x: rect.maxX - radius, y: rect.maxY),
+                   controlPoint1: NSPoint(x: rect.maxX, y: rect.maxY - radius * (1 - kappa)),
+                   controlPoint2: NSPoint(x: rect.maxX - radius * (1 - kappa), y: rect.maxY))
+        path.line(to: NSPoint(x: rect.minX + radius, y: rect.maxY))
+        // Top-left corner
+        path.curve(to: NSPoint(x: rect.minX, y: rect.maxY - radius),
+                   controlPoint1: NSPoint(x: rect.minX + radius * (1 - kappa), y: rect.maxY),
+                   controlPoint2: NSPoint(x: rect.minX, y: rect.maxY - radius * (1 - kappa)))
+        path.close()
+
         NSColor.controlBackgroundColor.withAlphaComponent(0.7).setFill()
-        NSBezierPath(rect: rect).fill()
+        path.fill()
         NSColor.systemBlue.setStroke()
-        let border = NSBezierPath(rect: rect)
-        border.lineWidth = 1
-        border.stroke()
+        path.lineWidth = 1
+        path.stroke()
 
         let midX = rect.midX
         let midY = rect.midY

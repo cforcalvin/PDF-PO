@@ -12,74 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         openNewWindow(with: nil)
-        setupMenuBar()
     }
     
-    private func setupMenuBar() {
-        let mainMenu = NSMenu()
-        
-        // App menu
-        let appMenuItem = NSMenuItem()
-        let appMenu = NSMenu()
-        appMenuItem.submenu = appMenu
-        
-        appMenu.addItem(NSMenuItem(title: "About PDFPO", action: nil, keyEquivalent: ""))
-        appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit PDFPO", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        
-        mainMenu.addItem(appMenuItem)
-        
-        // File menu
-        let fileMenuItem = NSMenuItem()
-        let fileMenu = NSMenu(title: "File")
-        fileMenuItem.submenu = fileMenu
-        
-        let openMenuItem = NSMenuItem(title: "Open...", action: #selector(openDocument(_:)), keyEquivalent: "o")
-        openMenuItem.target = self
-        fileMenu.addItem(openMenuItem)
-        
-        fileMenu.addItem(NSMenuItem.separator())
-        
-        let closeMenuItem = NSMenuItem(title: "Close", action: #selector(closeCurrentWindow(_:)), keyEquivalent: "w")
-        closeMenuItem.target = self
-        fileMenu.addItem(closeMenuItem)
-        
-        mainMenu.addItem(fileMenuItem)
-        
-        // Edit menu
-        let editMenuItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenuItem.submenu = editMenu
-        
-        let undoMenuItem = NSMenuItem(title: "Undo", action: #selector(undo(_:)), keyEquivalent: "z")
-        undoMenuItem.target = self
-        editMenu.addItem(undoMenuItem)
-        
-        let redoMenuItem = NSMenuItem(title: "Redo", action: #selector(redo(_:)), keyEquivalent: "z")
-        redoMenuItem.keyEquivalentModifierMask = [.command, .shift]
-        redoMenuItem.target = self
-        editMenu.addItem(redoMenuItem)
-        
-        editMenu.addItem(NSMenuItem.separator())
-        
-        let cutMenuItem = NSMenuItem(title: "Cut", action: #selector(cut(_:)), keyEquivalent: "x")
-        cutMenuItem.target = self
-        editMenu.addItem(cutMenuItem)
-        
-        let copyMenuItem = NSMenuItem(title: "Copy", action: #selector(copy(_:)), keyEquivalent: "c")
-        copyMenuItem.target = self
-        editMenu.addItem(copyMenuItem)
-        
-        let pasteMenuItem = NSMenuItem(title: "Paste", action: #selector(paste(_:)), keyEquivalent: "v")
-        pasteMenuItem.target = self
-        editMenu.addItem(pasteMenuItem)
-        
-        mainMenu.addItem(editMenuItem)
-        
-        NSApp.mainMenu = mainMenu
-    }
-    
-    @objc private func openDocument(_ sender: Any?) {
+    @objc func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.pdf]
         panel.allowsMultipleSelection = false
@@ -89,11 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    @objc private func closeCurrentWindow(_ sender: Any?) {
+    @objc func closeCurrentWindow(_ sender: Any?) {
         NSApp.keyWindow?.performClose(nil)
     }
     
-    @objc private func undo(_ sender: Any?) {
+    @objc func undo(_ sender: Any?) {
         // Try first responder's undo manager (for text views), then window's undo manager
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let undoManager = textView.undoManager,
@@ -106,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    @objc private func redo(_ sender: Any?) {
+    @objc func redo(_ sender: Any?) {
         // Try first responder's undo manager (for text views), then window's undo manager
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let undoManager = textView.undoManager,
@@ -119,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    @objc private func cut(_ sender: Any?) {
+    @objc func cut(_ sender: Any?) {
         // If a text view is first responder, let it handle cut
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let textViewWindow = textView.window,
@@ -133,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         copy(sender)
     }
     
-    @objc private func copy(_ sender: Any?) {
+    @objc func copy(_ sender: Any?) {
         // If a text view is first responder, let it handle copy
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let textViewWindow = textView.window,
@@ -154,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    @objc private func paste(_ sender: Any?) {
+    @objc func paste(_ sender: Any?) {
         // If a text view is first responder, let it handle paste
         if let textView = NSApp.keyWindow?.firstResponder as? NSTextView,
            let textViewWindow = textView.window,
@@ -382,6 +317,60 @@ struct PDFPOApp: App {
     var body: some Scene {
         Settings {
             EmptyView()
+        }
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Open...") {
+                    NSApp.sendAction(#selector(AppDelegate.openDocument(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("o")
+                
+                Button("Close") {
+                    NSApp.sendAction(#selector(AppDelegate.closeCurrentWindow(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("w")
+            }
+            
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    NSApp.sendAction(#selector(PDFDocumentController.save), to: nil, from: nil)
+                }
+                .keyboardShortcut("s")
+                
+                Button("Save As...") {
+                    NSApp.sendAction(#selector(PDFDocumentController.saveAs), to: nil, from: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+            }
+            
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") {
+                    NSApp.sendAction(#selector(AppDelegate.undo(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("z")
+                
+                Button("Redo") {
+                    NSApp.sendAction(#selector(AppDelegate.redo(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+            
+            CommandGroup(replacing: .pasteboard) {
+                Button("Cut") {
+                    NSApp.sendAction(#selector(AppDelegate.cut(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("x")
+                
+                Button("Copy") {
+                    NSApp.sendAction(#selector(AppDelegate.copy(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("c")
+                
+                Button("Paste") {
+                    NSApp.sendAction(#selector(AppDelegate.paste(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("v")
+            }
         }
     }
 }
